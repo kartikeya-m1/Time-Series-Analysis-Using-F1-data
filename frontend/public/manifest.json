@@ -1,0 +1,16 @@
+{
+  "short_name": "F1 Dashboard",
+  "name": "F1 Hyperspeed Dashboard",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#03B3C3",
+  "background_color": "#000000",
+  "description": "Advanced Formula 1 telemetry visualization with 3D hyperspeed effects"
+}

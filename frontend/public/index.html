@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="F1 Hyperspeed Dashboard - Advanced 3D visualization powered by Fast-F1"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Preload fonts for better performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Performance optimizations -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <title>F1 Hyperspeed Dashboard</title>
+    
+    <style>
+      /* Critical CSS for immediate rendering */
+      body {
+        margin: 0;
+        background: #000;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      
+      #root {
+        width: 100vw;
+        height: 100vh;
+      }
+      
+      /* Prevent FOUC (Flash of Unstyled Content) */
+      .loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 1.2em;
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this F1 Hyperspeed Dashboard.</noscript>
+    <div id="root">
+      <div class="loading">Loading F1 Hyperspeed Dashboard...</div>
+    </div>
+    
+    <!-- Performance monitoring -->
+    <script>
+      // Simple performance monitoring
+      window.addEventListener('load', function() {
+        const loadTime = performance.now();
+        console.log(`F1 Dashboard loaded in ${Math.round(loadTime)}ms`);
+      });
+      
+      // WebGL support check
+      function checkWebGLSupport() {
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          return !!gl;
+        } catch (e) {
+          return false;
+        }
+      }
+      
+      if (!checkWebGLSupport()) {
+        console.warn('WebGL not supported - 3D effects may not work properly');
+      }
+    </script>
+  </body>
+</html>
