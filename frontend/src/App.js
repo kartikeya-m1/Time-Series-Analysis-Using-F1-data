@@ -4,6 +4,7 @@ import Hyperspeed from './utils/Hyperspeed';
 import { hyperspeedPresets } from './utils/hyperspeedPresets';
 import F1DataPanel from './components/F1DataPanel';
 import F1TimeSeries from './components/F1TimeSeries';
+import F1InfoPanel from './components/F1InfoPanel';
 
 const AppContainer = styled.div`
   height: 100vh;
@@ -170,11 +171,20 @@ const App = () => {
   const [isSpeedingUp, setIsSpeedingUp] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [telemetryData, setTelemetryData] = useState(null);
+  
+  // Enhanced session state tracking
+  const [currentSession, setCurrentSession] = useState({
+    season: 2024,
+    eventName: 'Monaco Grand Prix',
+    sessionType: 'Q'
+  });
+  const [showInfoPanel, setShowInfoPanel] = useState(true);
 
 
 
   const handleDriverSelect = (driverCode, season, eventName, sessionType) => {
     setSelectedDriver(driverCode);
+    setCurrentSession({ season, eventName, sessionType });
     console.log(`Selected driver: ${driverCode} for ${season} ${eventName} ${sessionType}`);
     
     // Show time series when a driver is selected
@@ -186,20 +196,34 @@ const App = () => {
   const handleTelemetryDataChange = (data) => {
     setTelemetryData(data);
     
-    // Integrate telemetry data with Hyperspeed effects
-    if (data && data.currentSpeed) {
-      const speedRatio = data.currentSpeed / data.maxSpeed;
-      const newSpeed = 0.5 + (speedRatio * 1.5); // Scale speed based on telemetry
+    // Enhanced integration of telemetry data with Hyperspeed effects
+    if (data && data.statistics) {
+      const { statistics } = data;
       
+      // Calculate effect parameters based on F1 telemetry
+      const speedRatio = (statistics.max_speed || 300) / 350; // Normalize to F1 max speed
+      const aggressionRatio = (statistics.throttle_percentage || 50) / 100;
+      const gearRatio = (statistics.top_gear || 6) / 8;
+      
+      // Update hyperspeed effects based on real telemetry
       setEffectOptions(prev => ({
         ...prev,
-        speed: newSpeed
+        speed: 0.3 + (speedRatio * 1.2), // Speed based on max speed achieved
+        density: 50 + (aggressionRatio * 100), // Particle density based on throttle usage
+        colorIntensity: 0.5 + (speedRatio * 0.5), // Color intensity based on speed
+        distortionLevel: aggressionRatio * 0.3 // Distortion based on driving style
       }));
+      
+      console.log('Updated Hyperspeed effects based on telemetry:', {
+        maxSpeed: statistics.max_speed,
+        throttleUsage: statistics.throttle_percentage,
+        topGear: statistics.top_gear
+      });
     }
   };
 
   useEffect(() => {
-    // Keyboard controls
+    // Enhanced keyboard controls
     const handleKeyPress = (event) => {
       switch (event.key.toLowerCase()) {
         case 'h':
@@ -208,8 +232,12 @@ const App = () => {
         case 't':
           setShowTimeSeries(!showTimeSeries);
           break;
+        case 'i':
+          setShowInfoPanel(!showInfoPanel);
+          break;
         case 'escape':
           setShowUI(true);
+          setShowInfoPanel(true);
           break;
         default:
           break;
@@ -218,7 +246,7 @@ const App = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showUI, showTimeSeries]);
+  }, [showUI, showTimeSeries, showInfoPanel]);
 
   // Initialize with first preset
   useEffect(() => {
@@ -234,7 +262,7 @@ const App = () => {
 
       <Header>
         <Title>F1 HYPERSPEED DASHBOARD</Title>
-        <Subtitle>Powered by Fast-F1 • Press H to toggle UI • T for telemetry</Subtitle>
+        <Subtitle>Powered by Fast-F1 • H=UI • T=Charts • I=Info • Real F1 Telemetry Data</Subtitle>
       </Header>
 
       <ToggleButton onClick={() => setShowUI(!showUI)}>
@@ -248,6 +276,12 @@ const App = () => {
         >
           {showTimeSeries ? 'Hide Charts' : 'Show Charts'}
         </ViewButton>
+        <ViewButton 
+          active={showInfoPanel}
+          onClick={() => setShowInfoPanel(!showInfoPanel)}
+        >
+          {showInfoPanel ? 'Hide Info' : 'Show Info'}
+        </ViewButton>
       </ViewToggle>
 
       {showUI && (
@@ -258,6 +292,16 @@ const App = () => {
               selectedDriver={selectedDriver}
             />
           </DataPanel>
+          
+          {/* Real-time F1 information panel */}
+          {showInfoPanel && (
+            <F1InfoPanel 
+              season={currentSession.season}
+              eventName={currentSession.eventName}
+              sessionType={currentSession.sessionType}
+              selectedDriver={selectedDriver}
+            />
+          )}
         </UIOverlay>
       )}
 
@@ -268,8 +312,15 @@ const App = () => {
       )}
 
       <KeyHint>
-        Click and hold mouse or touch screen to speed up • T for telemetry charts • H to toggle UI
-        {telemetryData && ` • Current Speed: ${Math.round(telemetryData.currentSpeed)} km/h`}
+        Hold mouse to speed up • H=UI • T=Charts • I=Info • ESC=Reset
+        {telemetryData && telemetryData.statistics && (
+          <div style={{ marginTop: '5px', fontSize: '0.8em', opacity: 0.8 }}>
+            {selectedDriver}: {Math.round(telemetryData.statistics.max_speed)}km/h max • 
+            {telemetryData.statistics.throttle_percentage?.toFixed(1)}% throttle • 
+            Gear {telemetryData.statistics.top_gear} • 
+            {telemetryData.tire_info?.compound || 'Unknown'} tires
+          </div>
+        )}
       </KeyHint>
     </AppContainer>
   );

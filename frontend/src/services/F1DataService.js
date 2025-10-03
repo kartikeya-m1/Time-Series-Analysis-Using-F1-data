@@ -107,17 +107,74 @@ class F1DataService {
   }
 
   /**
-   * Get telemetry data for a specific driver and lap
+   * Get enhanced telemetry data with tire and weather context
    */
   async getTelemetryData(season = 2024, eventName = 'Monaco Grand Prix', sessionType = 'Q', driverCode = 'HAM', lapType = 'fastest') {
     try {
       const response = await this.axios.get(`/telemetry/${season}/${eventName}/${sessionType}/${driverCode}/${lapType}`);
-      return response.data;
+      
+      // Enhance response data with additional context
+      const telemetryData = response.data;
+      
+      // Add enhanced statistics if not present
+      if (!telemetryData.statistics || !telemetryData.statistics.throttle_percentage) {
+        telemetryData.statistics = this.calculateEnhancedStatistics(telemetryData);
+      }
+      
+      return telemetryData;
     } catch (error) {
       console.error('Error fetching telemetry data:', error);
       // Return mock telemetry data with realistic F1 patterns
       return this.generateMockTelemetryData(driverCode, sessionType);
     }
+  }
+
+  /**
+   * Calculate enhanced statistics from telemetry data
+   */
+  calculateEnhancedStatistics(telemetryData) {
+    if (!telemetryData.speed || !telemetryData.throttle || !telemetryData.brake) {
+      return {};
+    }
+
+    const { speed, throttle, brake, gear, rpm } = telemetryData;
+    
+    // Calculate percentages
+    const fullThrottleTime = throttle.filter(t => t >= 99).length / throttle.length * 100;
+    const brakingTime = brake.filter(b => b === true || b > 50).length / brake.length * 100;
+    const coastingTime = 100 - fullThrottleTime - brakingTime;
+    
+    // Calculate gear changes
+    let gearChanges = 0;
+    for (let i = 1; i < gear.length; i++) {
+      if (gear[i] !== gear[i-1]) gearChanges++;
+    }
+    
+    return {
+      max_speed: Math.max(...speed),
+      avg_speed: speed.reduce((a, b) => a + b, 0) / speed.length,
+      min_speed: Math.min(...speed),
+      speed_std: this.calculateStandardDeviation(speed),
+      top_gear: Math.max(...gear),
+      max_rpm: Math.max(...rpm),
+      avg_rpm: rpm.reduce((a, b) => a + b, 0) / rpm.length,
+      throttle_percentage: fullThrottleTime,
+      brake_percentage: brakingTime,
+      coast_percentage: coastingTime,
+      gear_changes: gearChanges,
+      drs_percentage: telemetryData.drs ? 
+        telemetryData.drs.filter(d => d > 0).length / telemetryData.drs.length * 100 : 0
+    };
+  }
+
+  /**
+   * Calculate standard deviation
+   */
+  calculateStandardDeviation(values) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
+    return Math.sqrt(avgSquaredDiff);
   }
 
   /**
@@ -168,7 +225,7 @@ class F1DataService {
   }
 
   /**
-   * Generate realistic mock telemetry data
+   * Generate realistic mock telemetry data with enhanced F1 structure
    */
   generateMockTelemetryData(driverCode, sessionType) {
     const trackProfiles = {
@@ -183,8 +240,8 @@ class F1DataService {
 
     const telemetryData = {
       driver: driverCode,
-      session: sessionType,
-      lap_time: `1:${(track.lapTime % 60).toFixed(3).padStart(6, '0')}`,
+      lap_time: track.lapTime,
+      lap_number: Math.floor(Math.random() * 20) + 1,
       time: [],
       distance: [],
       speed: [],
@@ -192,7 +249,35 @@ class F1DataService {
       brake: [],
       gear: [],
       rpm: [],
-      drs: []
+      drs: [],
+      // Enhanced F1 data structure
+      tire_info: {
+        compound: ['SOFT', 'MEDIUM', 'HARD'][Math.floor(Math.random() * 3)],
+        fresh_tyre: Math.random() > 0.7,
+        tyre_life: Math.floor(Math.random() * 15),
+        stint_number: Math.floor(Math.random() * 3) + 1
+      },
+      weather_info: {
+        air_temp: 22.5 + (Math.random() - 0.5) * 5,
+        track_temp: 35.2 + (Math.random() - 0.5) * 8,
+        humidity: 65 + (Math.random() - 0.5) * 20,
+        pressure: 1013.25,
+        wind_speed: 5.0 + Math.random() * 10,
+        wind_direction: Math.random() * 360,
+        rainfall: Math.random() > 0.85
+      },
+      track_status: {
+        track_status: 1, // Green flag
+        is_personal_best: Math.random() > 0.7,
+        position: Math.floor(Math.random() * 20) + 1,
+        pit_out_time: false,
+        pit_in_time: false
+      },
+      sector_times: {
+        sector_1: 28.123 + (Math.random() - 0.5) * 2,
+        sector_2: 31.456 + (Math.random() - 0.5) * 2,
+        sector_3: 24.877 + (Math.random() - 0.5) * 2
+      }
     };
 
     for (let i = 0; i < points; i++) {
@@ -224,8 +309,8 @@ class F1DataService {
       let throttle = Math.max(0, Math.min(100, 70 + speedChange * 3 + (Math.random() - 0.5) * 20));
       telemetryData.throttle.push(throttle);
       
-      // Generate brake (inverse relationship with throttle)
-      let brake = speedChange < -5 ? Math.min(100, -speedChange * 5 + Math.random() * 10) : Math.random() * 5;
+      // Generate brake (boolean for real F1 data)
+      let brake = speedChange < -5 ? true : (Math.random() < 0.05);
       telemetryData.brake.push(brake);
       
       // Generate gear based on speed
@@ -233,7 +318,7 @@ class F1DataService {
       telemetryData.gear.push(gear);
       
       // Generate RPM based on gear and speed
-      const rpmBase = 4000 + (speed / track.maxSpeed) * 8000;
+      const rpmBase = 6000 + (speed / track.maxSpeed) * 6000;
       telemetryData.rpm.push(rpmBase + (Math.random() - 0.5) * 500);
       
       // Generate DRS (mostly on straights)
@@ -241,23 +326,15 @@ class F1DataService {
       telemetryData.drs.push(drs);
     }
 
-    // Calculate statistics
-    const stats = {
-      max_speed: Math.max(...telemetryData.speed).toFixed(1),
-      avg_speed: (telemetryData.speed.reduce((a, b) => a + b, 0) / telemetryData.speed.length).toFixed(1),
-      top_gear: Math.max(...telemetryData.gear),
-      max_rpm: Math.max(...telemetryData.rpm).toFixed(0),
-      drs_activations: telemetryData.drs.filter(d => d === 1).length
-    };
+    // Calculate enhanced statistics
+    telemetryData.statistics = this.calculateEnhancedStatistics(telemetryData);
 
     return {
       ...telemetryData,
-      statistics: stats,
       track_info: {
         name: 'Monaco',
-        length: 3337,
-        turns: 19,
-        drs_zones: 1
+        country: 'Monaco',
+        length: 3337
       }
     };
   }
@@ -284,7 +361,7 @@ class F1DataService {
   }
 
   /**
-   * Get weather data for a session
+   * Get weather data for a session with detailed evolution
    */
   async getWeatherData(season = 2024, eventName = 'Monaco Grand Prix', sessionType = 'Q') {
     try {
@@ -294,13 +371,99 @@ class F1DataService {
       console.error('Error fetching weather data:', error);
       // Return mock weather data
       return {
-        air_temp: 22.5,
-        track_temp: 35.2,
-        humidity: 65,
-        pressure: 1013.2,
-        wind_speed: 3.2,
-        wind_direction: 180,
-        rainfall: false
+        current: {
+          air_temp: 22.5,
+          track_temp: 35.2,
+          humidity: 65,
+          pressure: 1013.2,
+          wind_speed: 3.2,
+          wind_direction: 180,
+          rainfall: false
+        },
+        session_evolution: {
+          air_temp_range: [20.5, 24.8],
+          track_temp_range: [32.1, 38.9],
+          humidity_range: [58, 72],
+          rainfall_periods: 0
+        }
+      };
+    }
+  }
+
+  /**
+   * Get comprehensive tire strategy data for all drivers
+   */
+  async getTireStrategyData(season = 2024, eventName = 'Monaco Grand Prix', sessionType = 'R') {
+    try {
+      const response = await this.axios.get(`/tires/${season}/${eventName}/${sessionType}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching tire strategy data:', error);
+      // Return mock tire strategy data
+      return {
+        session_info: {
+          season: season,
+          event_name: eventName,
+          session_type: sessionType
+        },
+        tire_strategies: {
+          'VER': {
+            total_stints: 2,
+            stints: [
+              { compound: 'MEDIUM', start_lap: 1, end_lap: 35, duration: 35 },
+              { compound: 'HARD', start_lap: 36, end_lap: 70, duration: 35 }
+            ],
+            compounds_used: ['MEDIUM', 'HARD']
+          },
+          'HAM': {
+            total_stints: 3,
+            stints: [
+              { compound: 'SOFT', start_lap: 1, end_lap: 15, duration: 15 },
+              { compound: 'MEDIUM', start_lap: 16, end_lap: 45, duration: 30 },
+              { compound: 'HARD', start_lap: 46, end_lap: 70, duration: 25 }
+            ],
+            compounds_used: ['SOFT', 'MEDIUM', 'HARD']
+          }
+        },
+        compound_usage: {
+          distribution: { 'MEDIUM': 45, 'HARD': 35, 'SOFT': 20 },
+          most_popular: 'MEDIUM',
+          total_compounds: 3
+        }
+      };
+    }
+  }
+
+  /**
+   * Get comprehensive session summary with key statistics
+   */
+  async getSessionSummary(season = 2024, eventName = 'Monaco Grand Prix', sessionType = 'Q') {
+    try {
+      const response = await this.axios.get(`/session-summary/${season}/${eventName}/${sessionType}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching session summary:', error);
+      // Return mock session summary
+      return {
+        session_info: {
+          season: season,
+          event_name: eventName,
+          session_type: sessionType,
+          date: '2024-05-26 14:00:00',
+          total_laps: 156
+        },
+        fastest_lap: {
+          driver: 'LEC',
+          lap_time: '0 days 00:01:23.456000',
+          lap_number: 12,
+          compound: 'SOFT'
+        },
+        statistics: {
+          total_drivers: 20,
+          total_laps_completed: 156,
+          track_limit_violations: 8,
+          session_duration: '1:30:00'
+        }
       };
     }
   }
